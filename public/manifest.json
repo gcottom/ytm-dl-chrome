@@ -1,0 +1,29 @@
+{
+    "name": "YTM DL Ext",
+    "description": "This extension is for downloading music directly from YouTube Music",
+    "version": "1.0.0",
+    "manifest_version": 3,
+    "permissions": [
+       "activeTab",
+       "scripting",
+       "declarativeNetRequest",
+       "webRequest",
+       "downloads"
+    ],
+    "host_permissions":[
+      "*://music.youtube.com/*",
+      "*://api.gagecottom.com/*"
+    ],
+    "content_scripts": [
+        {
+          "js": [
+            "content.js"
+          ],
+          "css": [ "contentstyles.css" ],
+          "matches": ["https://music.youtube.com/*"]
+        }
+      ],
+      "background": {
+        "service_worker": "background.js"
+     }
+ }
