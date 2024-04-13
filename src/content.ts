@@ -1,41 +1,23 @@
-interface FetchTokenResponse {
-    token: string;
-}
-
 interface GetTrackResponse {
-    trackdata: string;
-    filename: string;
-    author: string;
+    status: string
 }
 
-interface GetMetaResponse {
-    absoluteMatchFound: boolean;
-    absoluteMatchMeta: MetaResult;
-    results: any; // Replace 'any' with appropriate types
+interface DLStatusTrack {
+    id: string,
+    type: string,
+    done: boolean,
+    url: string,
+    details: DLDetailsTrack
 }
 
-interface SetMetaRequest {
-    url: string;
-    title: string;
-    artist: string;
-    album: string;
-    albumart: string;
+interface DLDetailsTrack {
+    downloaded: boolean,
+    converted: boolean,
+    genred: boolean,
+    metaFetched: boolean,
+    metaApplied: boolean
 }
 
-interface SetMetaResponse {
-    filename: string;
-}
-
-interface TrackConvertedResponse {
-    converted: boolean;
-    trackdata: string;
-}
-interface MetaResult {
-    title: string,
-    artist: string,
-    album: string,
-    albumart: string
-}
 var bearer = "";
 
 document.onclick = function () {
@@ -69,9 +51,8 @@ function checkForLink() {
     }
 }
 async function triggerDL(ytlink: string) {
-    const m = getPlayerMeta();
     startloader("info", "Download Initiated!");
-    chrome.runtime.sendMessage({ ytlink: ytlink, md: m });
+    chrome.runtime.sendMessage({ ytlink: ytlink });
 }
 function startloader(type: string, msg: string) {
     const loaderdiv = document.createElement("div");
@@ -152,37 +133,4 @@ function dismissiblefunc() {
             }
         }
     }
-}
-function getPlayerMeta(): MetaResult {
-    var m: MetaResult = { title: "", artist: "", album: "", albumart: "" };
-    const element1 = document.querySelector('yt-formatted-string.title.style-scope.ytmusic-player-bar');
-    if (element1) {
-        const text = element1.textContent;
-        if (text) {
-            m.title = text;
-        }
-    }
-
-    const element = document.querySelector('yt-formatted-string.byline.style-scope.ytmusic-player-bar');
-    if (element) {
-        const textContent = element.textContent;
-        const aay = textContent?.split(" • ")
-        if (aay) {
-            if (aay.length >= 1) {
-                m.artist = aay[0];
-            }
-            if (aay.length >= 2) {
-                m.album = aay[1];
-            }
-        }
-    }
-
-    const imageElement = document.getElementById('img');
-    if (imageElement && imageElement.hasAttribute('src')) {
-        const srcValue = imageElement.getAttribute('src');
-        if (srcValue) {
-            m.albumart = srcValue;
-        }
-    }
-    return m;
 }
