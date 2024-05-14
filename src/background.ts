@@ -1,8 +1,38 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.ytlink) {
-        getTrack(message.ytlink);
+        if (message.name) {
+            getTrack(message.ytlink, message.name);
+        } else {
+            getTrack(message.ytlink)
+        }
+    } else if (message.rules) {
+        initRules()
     }
 });
+
+function initRules() {
+    const RULE = {
+        id: 1,
+        condition: {
+            initiatorDomains: [chrome.runtime.id],
+            requestDomains: ['music.youtube.com'],
+            resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME, chrome.declarativeNetRequest.ResourceType.SUB_FRAME],
+        },
+        action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            responseHeaders: [
+                { header: 'X-Frame-Options', operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE },
+                { header: 'Frame-Options', operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE },
+                { header: 'Content-Security-Policy', operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE },
+                { header: 'User-Agent', operation: chrome.declarativeNetRequest.HeaderOperation.SET, value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" },
+            ],
+        },
+    };
+    chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [RULE.id],
+        addRules: [RULE],
+    });
+}
 
 async function downloadTrack(ytlink: string): Promise<GetTrackResponse> {
     try {
@@ -20,22 +50,30 @@ async function downloadTrack(ytlink: string): Promise<GetTrackResponse> {
         throw error;
     }
 }
-async function getTrack(ytlink: string) {
-    console.log("sending download track request")
-    downloadTrack(ytlink).then((dtresult) => {
-        ytlink = sanitizeUrl(ytlink)
+async function getTrack(link: string, fn?: string) {
+    console.log("sending download track request for: " + link)
+    if (fn == null || fn == undefined || fn == "") {
+        fn = ""
+    }
+    downloadTrack(link).then(() => {
+        var ytlink = sanitizeUrl(link)
         console.log("polling download status");
         pollStatus(ytlink).then(() => {
             getStatus(ytlink).then((gcr) => {
                 console.log("fetching file")
-                fetchCompleteFile(gcr.url).then(() => {
+                fetchCompleteFile(gcr.url, fn).then(() => {
                     closemessage();
+                    updatePopup(link);
                 });
             });
 
+        }).catch(() => {
+            console.log("caught error in dl poll")
+            sendErrorMessage()
         })
     });
 }
+
 async function closemessage() {
     try {
         const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -50,6 +88,33 @@ async function closemessage() {
     } catch (error) {
         console.error("Error:", error);
     }
+}
+
+async function sendErrorMessage() {
+    try {
+        const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+        const activeTab = tabs[0]; // Access the first tab directly
+
+        if (activeTab?.id) {
+            chrome.tabs.sendMessage(activeTab.id, { error: true });
+            // Handle the response here
+        } else {
+            console.error("No active tabs found");
+        }
+    } catch (error) {
+        console.error("Error:", error);
+    }
+}
+
+function updatePopup(id: string) {
+    getFromDB(function (db) {
+        var n = db.get(id)
+        if (n != null && n != undefined) {
+            n.state = "dl_done"
+            db.set(id, n)
+            chrome.storage.local.set({ "downloaddb": Object.fromEntries(db) })
+        }
+    })
 }
 
 async function pollStatus(ytlink: string, st?: number): Promise<boolean> {
@@ -105,19 +170,44 @@ async function getStatus(ytlink: string): Promise<DLStatusTrack> {
     }
 }
 
-
-async function fetchCompleteFile(id: string): Promise<boolean> {
-    var fn = sanitizeAWSFileName(id)
+async function fetchCompleteFile(id: string, fn?: string): Promise<boolean> {
+    if (fn == null || fn == undefined || fn == "") {
+        fn = sanitizeAWSFileName(id)
+    } else {
+        var t = sanitizeAWSFileName(id).split(".")
+        var ext = t[t.length - 1]
+        fn = sanitizeFileName(fn)
+        fn = fn.trim() + "." + ext
+    }
     console.log(fn)
     chrome.downloads.download({ url: id, filename: fn });
     return true;
 }
-
+function sanitizeFileName(fn: string): string {
+    const reg1 = new RegExp('[:/<>\:"\\|?*]', 'g')
+    fn = fn.replace(reg1, "")
+    const reg2 = new RegExp('\\s+', 'g')
+    return fn.replace(reg2, " ")
+}
 function sanitizeUrl(ytlink: string): string {
-    const reg = new RegExp('https://|www.|music.youtube.com/|youtube.com/|youtu.be/|watch\\?v=|&feature=share', 'g');
+    const reg = new RegExp('https://|www.|music.youtube.com/|youtube.com/|youtu.be/|watch\\?v=|&feature=share|playlist\\?list=', 'g');
     return ytlink.replace(reg, "").split("&")[0];
 }
+
 function sanitizeAWSFileName(url: string) {
     const reg = new RegExp('https://|www.|yt-dl-ui-downloads.s3.us-east-2|.amazonaws.com/', 'g')
     return url.replace(reg, "")
+}
+
+function getFromDB(callback: (db: Map<string, YTDetails>) => void) {
+    chrome.storage.local.get("downloaddb", function (result) {
+        const downloaddb = result.downloaddb;
+        if (downloaddb) {
+            const db = new Map<string, YTDetails>(Object.entries(downloaddb));
+            callback(db);
+        } else {
+            const db = new Map<string, YTDetails>();
+            callback(db);
+        }
+    });
 }

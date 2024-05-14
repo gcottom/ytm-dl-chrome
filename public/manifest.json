@@ -1,14 +1,16 @@
 {
-    "name": "YTM DL Ext",
+    "name": "YTM Downloader",
     "description": "This extension is for downloading music directly from YouTube Music",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "manifest_version": 3,
+    "minimum_chrome_version": "101",
     "permissions": [
        "activeTab",
        "scripting",
-       "declarativeNetRequest",
+       "declarativeNetRequestWithHostAccess",
        "webRequest",
-       "downloads"
+       "downloads",
+       "storage"
     ],
     "host_permissions":[
       "*://music.youtube.com/*",
@@ -25,5 +27,15 @@
       ],
       "background": {
         "service_worker": "background.js"
+     },
+     "web_accessible_resources": [{
+      "matches": ["*://*.youtube.com/*"],
+      "resources": ["download.png", "128.png"]
+}],
+     "icons": {
+      "128": "128.png"
+     },
+     "action": {
+      "default_popup": "popup.html"
      }
  }
